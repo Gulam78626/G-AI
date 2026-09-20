@@ -1,8 +1,17 @@
 const express = require("express");
 const cors = require("cors");
+const dotenv = require("dotenv");
+const { GoogleGenAI } = require("@google/genai");
+
+dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+// Gemini AI
+const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY
+});
 
 // Middleware
 app.use(cors());
@@ -14,21 +23,19 @@ app.get("/", (req, res) => {
     res.sendFile(__dirname + "/index.html");
 });
 
-// Status API
+// Status
 app.get("/api/status", (req, res) => {
     res.json({
         success: true,
         status: "online",
-        ai: "Qwen3 4B",
-        provider: "Ollama Local AI"
+        ai: "Gemini",
+        provider: "Google Gemini API"
     });
 });
 
 // Chat API
 app.post("/api/chat", async (req, res) => {
-
     try {
-
         const message = req.body.message;
 
         if (!message || !message.trim()) {
@@ -40,64 +47,17 @@ app.post("/api/chat", async (req, res) => {
 
         console.log("💬 User:", message);
 
-        const ollamaResponse = await fetch(
-            "http://127.0.0.1:11434/api/chat",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    model: "qwen3:4b-instruct",
-
-                    messages: [
-                        {
-                            role: "user",
-                            content: message
-                        }
-                    ],
-
-                    // Disable Qwen thinking for faster replies
-                    think: false,
-
-                    stream: false,
-
-                    options: {
-                        temperature: 0.7,
-                        num_predict: 300
-                    }
-                })
+        const response = await ai.models.generateContent({
+            model: "gemini-3.6-flash",
+            contents: message,
+            config: {
+                temperature: 0.7,
+                maxOutputTokens: 500
             }
-        );
-
-        console.log(
-            "🤖 Ollama HTTP Status:",
-            ollamaResponse.status
-        );
-
-        if (!ollamaResponse.ok) {
-
-            const errorText = await ollamaResponse.text();
-
-            console.error(
-                "❌ Ollama Error:",
-                errorText
-            );
-
-            return res.status(500).json({
-                success: false,
-                error: "Ollama error: " + errorText
-            });
-        }
-
-        const data = await ollamaResponse.json();
-
-        console.log("✅ Qwen response received");
+        });
 
         const reply =
-            data?.message?.content ||
+            response.text ||
             "Sorry, I could not generate a response.";
 
         console.log("🤖 G-AI:", reply);
@@ -108,31 +68,23 @@ app.post("/api/chat", async (req, res) => {
         });
 
     } catch (error) {
-
-        console.error(
-            "❌ Local AI Error:",
-            error
-        );
+        console.error("❌ Gemini Error:", error);
 
         res.status(500).json({
             success: false,
-            error: error.message || "Unable to connect to Ollama"
+            error: error.message || "Gemini API error"
         });
     }
 });
 
 // Start server
 app.listen(PORT, () => {
-
     console.log("");
     console.log("=================================");
     console.log("🚀 G-AI Server Started");
-    console.log("🤖 Qwen3 4B Local AI");
-    console.log("⚡ Fast Mode: Thinking Disabled");
-    console.log("🔑 No API Key Required");
+    console.log("🤖 Google Gemini AI");
+    console.log("☁️ Cloud Ready");
     console.log("=================================");
-    console.log(
-        `🌐 http://localhost:${PORT}`
-    );
+    console.log(`🌐 http://localhost:${PORT}`);
     console.log("");
 });
